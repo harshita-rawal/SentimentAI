@@ -2,17 +2,17 @@
 app.py — Flask backend for Sentiment Analysis
 =============================================
 Start the server with:
-    python app.py
-Then open http://127.0.0.1:5000 in your browser.
+    python app.py        (local dev)
+    gunicorn app:app     (production)
 """
 
 import os
+import csv
 import pickle
+import subprocess
 import numpy as np
 
 from flask import Flask, render_template, request, jsonify
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 MODEL_PATH     = os.path.join("model", "sentiment_model.keras")
@@ -22,15 +22,29 @@ MAX_LEN        = 100
 
 app = Flask(__name__)
 
+
+# --------------------------------------------------------------------------- #
+#  Auto-train model at startup if files are missing                            #
+# --------------------------------------------------------------------------- #
+def ensure_model():
+    if not os.path.exists(MODEL_PATH) or not os.path.exists(TOKENIZER_PATH):
+        print("[INFO] Model files not found — running train.py ...")
+        result = subprocess.run(["python", "train.py"], capture_output=True, text=True)
+        if result.returncode != 0:
+            print("[ERROR] Training failed:")
+            print(result.stderr)
+            raise RuntimeError("Model training failed. Check train.py and dataset.")
+        print("[INFO] Training complete.")
+
+
 # --------------------------------------------------------------------------- #
 #  Load model & tokenizer once at startup                                      #
 # --------------------------------------------------------------------------- #
-print("[INFO] Loading model and tokenizer …")
+ensure_model()
 
-if not os.path.exists(MODEL_PATH) or not os.path.exists(TOKENIZER_PATH):
-    raise FileNotFoundError(
-        "Model files not found. Please run 'python train.py' first."
-    )
+print("[INFO] Loading model and tokenizer ...")
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 model = load_model(MODEL_PATH)
 with open(TOKENIZER_PATH, "rb") as f:
@@ -44,9 +58,9 @@ print("[INFO] Ready!")
 # --------------------------------------------------------------------------- #
 def predict_sentiment(text: str) -> dict:
     """Return label, confidence, and a friendly message."""
-    seq     = tokenizer.texts_to_sequences([text])
-    padded  = pad_sequences(seq, maxlen=MAX_LEN, padding="post", truncating="post")
-    score   = float(model.predict(padded, verbose=0)[0][0])
+    seq    = tokenizer.texts_to_sequences([text])
+    padded = pad_sequences(seq, maxlen=MAX_LEN, padding="post", truncating="post")
+    score  = float(model.predict(padded, verbose=0)[0][0])
 
     if score >= 0.5:
         label      = "Positive"
@@ -91,4 +105,5 @@ def predict():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
