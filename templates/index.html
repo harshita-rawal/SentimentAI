@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SentimentAI — Text Sentiment Analyzer</title>
+  <meta name="description" content="Enter any review or sentence and instantly find out if it carries a positive or negative sentiment." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+
+  <main class="wrapper">
+
+    <!-- ── Header ───────────────────────────────────────────── -->
+    <header class="hero">
+      <h1>Sentiment<span class="accent">AI</span></h1>
+      <div class="divider"></div>
+      <p class="subtitle">
+        Type any product review or sentence below — the model will tell you
+        whether it reads as <strong>Positive</strong> or <strong>Negative</strong>.
+      </p>
+    </header>
+
+    <!-- ── Input ────────────────────────────────────────────── -->
+    <section class="input-section" aria-label="Text input">
+      <p class="input-label">Your review</p>
+      <label for="review-input" class="sr-only">Enter your review</label>
+      <div class="textarea-wrapper">
+        <textarea
+          id="review-input"
+          placeholder="e.g. The packaging was lovely and it arrived right on time…"
+          rows="4"
+          maxlength="500"
+          aria-label="Review text input"
+        ></textarea>
+        <div class="char-counter"><span id="char-count">0</span> / 500</div>
+      </div>
+
+      <div class="btn-row">
+        <button id="analyze-btn" class="btn btn-primary" aria-label="Analyze sentiment">
+          <span class="btn-icon">🔍</span>
+          <span class="btn-text">Analyze Sentiment</span>
+          <span class="btn-spinner" aria-hidden="true"></span>
+        </button>
+        <button id="clear-btn" class="btn btn-secondary" aria-label="Clear input">
+          Clear
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Sample chips ──────────────────────────────────────── -->
+    <section class="samples" aria-label="Sample reviews">
+      <p class="samples-label">Try a sample</p>
+      <div class="sample-chips">
+        <button class="chip" data-text="This product is absolutely amazing, I love it!">😊 Positive</button>
+        <button class="chip" data-text="Terrible quality, complete waste of money.">😞 Negative</button>
+        <button class="chip" data-text="Fast shipping and great customer service!">🚀 Fast delivery</button>
+        <button class="chip" data-text="Broke after one day, very disappointed.">💔 Disappointed</button>
+      </div>
+    </section>
+
+    <!-- ── Result ────────────────────────────────────────────── -->
+    <section
+      id="result-section"
+      class="result-card hidden"
+      aria-live="polite"
+      aria-label="Prediction result"
+    >
+      <div class="result-header">
+        <span id="result-emoji" class="result-emoji" aria-hidden="true"></span>
+        <div>
+          <p class="result-label-small">Predicted Sentiment</p>
+          <h2 id="result-label" class="result-label"></h2>
+        </div>
+      </div>
+
+      <p id="result-message" class="result-message"></p>
+
+      <!-- Confidence bar -->
+      <div class="confidence-section">
+        <div class="confidence-header">
+          <span>Confidence</span>
+          <span id="confidence-pct" class="confidence-value"></span>
+        </div>
+        <div class="progress-track" role="progressbar" aria-label="Confidence level">
+          <div id="progress-bar" class="progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- Raw score -->
+      <div class="meta-row">
+        <span class="meta-pill">Model score: <strong id="raw-score"></strong></span>
+        <span class="meta-pill">Threshold: <strong>0.5</strong></span>
+      </div>
+    </section>
+
+    <!-- ── Error ──────────────────────────────────────────────── -->
+    <div id="error-card" class="error-card hidden" role="alert"></div>
+
+    <!-- ── Info ──────────────────────────────────────────────── -->
+    <section class="info-grid" aria-label="How it works">
+      <div class="info-card">
+        <div class="info-icon">📊</div>
+        <h3>Dataset</h3>
+        <p>Trained on 100 hand-crafted positive &amp; negative reviews from everyday e-commerce language.</p>
+      </div>
+      <div class="info-card">
+        <div class="info-icon">🧠</div>
+        <h3>LSTM Model</h3>
+        <p>Uses an Embedding layer and an LSTM layer built with TensorFlow / Keras to understand text patterns.</p>
+      </div>
+      <div class="info-card">
+        <div class="info-icon">⚗️</div>
+        <h3>How it works</h3>
+        <p>Your text is tokenised, padded to length 100, then the sigmoid output gives a 0–1 positivity score.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    Built with HTML · CSS · Flask · TensorFlow / Keras
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
