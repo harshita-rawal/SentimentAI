@@ -1,14 +1,14 @@
 """
 train.py — Train an LSTM-based sentiment classifier
 =====================================================
-Run this script ONCE before starting the Flask app:
+Run this script to train the model:
     python train.py
 It will:
   1. Load data/dataset.csv
-  2. Tokenize & pad the text
-  3. Train an Embedding + LSTM model (Keras)
-  4. Save model  → model/sentiment_model.keras
-  5. Save tokenizer → model/tokenizer.pkl
+  2. Tokenize & pad the text (pre-padding)
+  3. Train a Bidirectional LSTM + GlobalMaxPooling model
+  4. Save model     → model/sentiment_model.keras
+  5. Save tokenizer → model/tokenizer.pkl & model/tokenizer.json
 """
 
 import os
@@ -23,7 +23,7 @@ import tensorflow as tf
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout, SpatialDropout1D
+from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout, Bidirectional, GlobalMaxPooling1D
 from tensorflow.keras.callbacks import EarlyStopping
 
 # ─── Config ───────────────────────────────────────────────────────────────────
@@ -31,24 +31,25 @@ DATA_PATH       = "data/dataset.csv"
 MODEL_DIR       = "model"
 MODEL_PATH      = os.path.join(MODEL_DIR, "sentiment_model.keras")
 TOKENIZER_PATH  = os.path.join(MODEL_DIR, "tokenizer.pkl")
+TOKENIZER_JSON  = os.path.join(MODEL_DIR, "tokenizer.json")
 
-VOCAB_SIZE      = 5000      # max number of unique words to keep
-MAX_LEN         = 100       # max sequence length (pad/truncate)
+VOCAB_SIZE      = 3000      # max number of unique words to keep
+MAX_LEN         = 50        # max sequence length (pad/truncate)
 EMBED_DIM       = 64        # word-embedding dimensions
-LSTM_UNITS      = 64
-DROPOUT         = 0.3
+LSTM_UNITS      = 32
+DROPOUT         = 0.2
 BATCH_SIZE      = 16
-EPOCHS          = 20        # EarlyStopping will stop earlier if needed
+EPOCHS          = 25        # EarlyStopping will stop earlier if needed
 # ──────────────────────────────────────────────────────────────────────────────
 
 
 def load_data(path: str):
-    # Use quoting=QUOTE_ALL so reviews containing commas are handled correctly
     df = pd.read_csv(
         path,
         quoting=csv.QUOTE_MINIMAL,
         on_bad_lines="skip",
         engine="python",
+        encoding="utf-8",
     )
     df.columns = df.columns.str.strip().str.lower()
     df = df.dropna(subset=["review", "sentiment"])
@@ -70,20 +71,21 @@ def build_tokenizer(texts, vocab_size):
 
 def preprocess(texts, tokenizer, max_len):
     seqs = tokenizer.texts_to_sequences(texts)
-    return pad_sequences(seqs, maxlen=max_len, padding="post", truncating="post")
+    # pre-padding ensures words are close to the output layer for optimal gradient flow
+    return pad_sequences(seqs, maxlen=max_len, padding="pre", truncating="post")
 
 
 def build_model(vocab_size, embed_dim, max_len, lstm_units, dropout):
     model = Sequential([
-        Embedding(vocab_size, embed_dim, input_length=max_len),
-        SpatialDropout1D(dropout),
-        LSTM(lstm_units, dropout=dropout, recurrent_dropout=dropout),
+        Embedding(vocab_size, embed_dim),
+        Bidirectional(LSTM(lstm_units, return_sequences=True)),
+        GlobalMaxPooling1D(),
         Dense(32, activation="relu"),
         Dropout(dropout),
         Dense(1, activation="sigmoid"),      # binary output
     ])
     model.compile(
-        optimizer="adam",
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.003),
         loss="binary_crossentropy",
         metrics=["accuracy"],
     )
@@ -97,11 +99,11 @@ def main():
     # 1. Load & split
     texts, labels = load_data(DATA_PATH)
     X_train, X_val, y_train, y_val = train_test_split(
-        texts, labels, test_size=0.2, random_state=42, stratify=labels
+        texts, labels, test_size=0.15, random_state=42, stratify=labels
     )
 
-    # 2. Tokenise
-    tokenizer = build_tokenizer(X_train, VOCAB_SIZE)
+    # 2. Tokenize on all texts to capture full vocabulary
+    tokenizer = build_tokenizer(texts, VOCAB_SIZE)
 
     # 3. Pad / truncate
     X_train_pad = preprocess(X_train, tokenizer, MAX_LEN)
@@ -110,10 +112,11 @@ def main():
     y_val_arr   = np.array(y_val)
 
     # 4. Build & train
-    model = build_model(VOCAB_SIZE, EMBED_DIM, MAX_LEN, LSTM_UNITS, DROPOUT)
+    actual_vocab_size = min(len(tokenizer.word_index) + 2, VOCAB_SIZE)
+    model = build_model(actual_vocab_size, EMBED_DIM, MAX_LEN, LSTM_UNITS, DROPOUT)
 
     early_stop = EarlyStopping(
-        monitor="val_loss", patience=4, restore_best_weights=True
+        monitor="val_loss", patience=6, restore_best_weights=True
     )
 
     print("\n[INFO] Starting training …")
@@ -137,6 +140,10 @@ def main():
     with open(TOKENIZER_PATH, "wb") as f:
         pickle.dump(tokenizer, f)
     print(f"[INFO] Tokenizer saved -> {TOKENIZER_PATH}")
+
+    with open(TOKENIZER_JSON, "w", encoding="utf-8") as f:
+        f.write(tokenizer.to_json())
+    print(f"[INFO] Tokenizer JSON saved -> {TOKENIZER_JSON}")
 
     print("\n[DONE] Training complete! You can now run: python app.py")
 

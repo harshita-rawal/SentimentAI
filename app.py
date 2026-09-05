@@ -17,7 +17,8 @@ from flask import Flask, render_template, request, jsonify
 # ─── Config ───────────────────────────────────────────────────────────────────
 MODEL_PATH     = os.path.join("model", "sentiment_model.keras")
 TOKENIZER_PATH = os.path.join("model", "tokenizer.pkl")
-MAX_LEN        = 100
+TOKENIZER_JSON = os.path.join("model", "tokenizer.json")
+MAX_LEN        = 50
 # ──────────────────────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
@@ -27,7 +28,7 @@ app = Flask(__name__)
 #  Auto-train model at startup if files are missing                            #
 # --------------------------------------------------------------------------- #
 def ensure_model():
-    if not os.path.exists(MODEL_PATH) or not os.path.exists(TOKENIZER_PATH):
+    if not os.path.exists(MODEL_PATH) or (not os.path.exists(TOKENIZER_PATH) and not os.path.exists(TOKENIZER_JSON)):
         print("[INFO] Model files not found — running train.py ...")
         result = subprocess.run(["python", "train.py"], capture_output=True, text=True)
         if result.returncode != 0:
@@ -45,14 +46,19 @@ ensure_model()
 print("[INFO] Loading model and tokenizer ...")
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.text import tokenizer_from_json
 
 model = load_model(MODEL_PATH)
-with open(TOKENIZER_PATH, "rb") as f:
-    tokenizer = pickle.load(f)
+if os.path.exists(TOKENIZER_JSON):
+    with open(TOKENIZER_JSON, "r", encoding="utf-8") as f:
+        tokenizer = tokenizer_from_json(f.read())
+else:
+    with open(TOKENIZER_PATH, "rb") as f:
+        tokenizer = pickle.load(f)
 
 # Warm up the computation graph so the first user request doesn't incur compilation lag
 try:
-    dummy = pad_sequences([[0]], maxlen=MAX_LEN, padding="post")
+    dummy = pad_sequences([[0]], maxlen=MAX_LEN, padding="pre")
     _ = model(dummy, training=False)
     print("[INFO] Model warmed up and ready!")
 except Exception as e:
@@ -66,7 +72,7 @@ except Exception as e:
 def predict_sentiment(text: str) -> dict:
     """Return label, confidence, and a friendly message."""
     seq    = tokenizer.texts_to_sequences([text])
-    padded = pad_sequences(seq, maxlen=MAX_LEN, padding="post", truncating="post")
+    padded = pad_sequences(seq, maxlen=MAX_LEN, padding="pre", truncating="post")
     # Direct callable is significantly faster than model.predict for single samples
     score  = float(model(padded, training=False).numpy()[0][0])
 
