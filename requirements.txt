@@ -1,5 +1,5 @@
 flask>=2.3
-tensorflow-cpu>=2.13,<2.16
+tensorflow-cpu>=2.16
 numpy>=1.24
 pandas>=2.0
 scikit-learn>=1.3
