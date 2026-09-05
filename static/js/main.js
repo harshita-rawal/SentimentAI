@@ -72,16 +72,24 @@ async function runAnalysis() {
       body:    JSON.stringify({ text }),
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      showError("⚠️  " + (data.error || "Server error. Please try again."));
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        showError("⏳ The server is warming up from sleep. Please wait 15–20 seconds and click Analyze again.");
+      } else {
+        let errMessage = "Server error. Please try again.";
+        try {
+          const errData = await response.json();
+          if (errData && errData.error) errMessage = errData.error;
+        } catch (_) {}
+        showError("⚠️  " + errMessage);
+      }
       return;
     }
 
+    const data = await response.json();
     showResult(data);
   } catch (err) {
-    showError("⚠️  Could not reach the server. Is Flask running?");
+    showError("⚠️  Could not reach the server. If testing locally, ensure Flask is running. If on Render, please wait ~20s for cold start.");
     console.error(err);
   } finally {
     setLoading(false);

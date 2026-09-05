@@ -50,7 +50,14 @@ model = load_model(MODEL_PATH)
 with open(TOKENIZER_PATH, "rb") as f:
     tokenizer = pickle.load(f)
 
-print("[INFO] Ready!")
+# Warm up the computation graph so the first user request doesn't incur compilation lag
+try:
+    dummy = pad_sequences([[0]], maxlen=MAX_LEN, padding="post")
+    _ = model(dummy, training=False)
+    print("[INFO] Model warmed up and ready!")
+except Exception as e:
+    print(f"[WARN] Warmup skipped: {e}")
+    print("[INFO] Ready!")
 
 
 # --------------------------------------------------------------------------- #
@@ -60,7 +67,8 @@ def predict_sentiment(text: str) -> dict:
     """Return label, confidence, and a friendly message."""
     seq    = tokenizer.texts_to_sequences([text])
     padded = pad_sequences(seq, maxlen=MAX_LEN, padding="post", truncating="post")
-    score  = float(model.predict(padded, verbose=0)[0][0])
+    # Direct callable is significantly faster than model.predict for single samples
+    score  = float(model(padded, training=False).numpy()[0][0])
 
     if score >= 0.5:
         label      = "Positive"
